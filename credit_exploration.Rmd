@@ -1,0 +1,283 @@
+---
+title: "credit_exploration"
+output: html_document
+---
+# libraries
+```{r}
+library(shiny)
+library(tidyverse)
+library(glue)
+library(DT)
+library(lubridate)
+library(broom)
+```
+
+```{r}
+credit_raw <- read_csv("../data/loans_full_schema.csv") 
+
+credit <- credit_raw |>
+  mutate(
+    default = if_else(
+      loan_status %in% c("Charged Off", "Default", "Late (31-120 days)"),
+      1L, 0L
+    )
+  )
+#This model predicts probability of non-completion, not realized default.
+```
+#cleaning the data
+
+Dropping a few things that leak future information and are not valid predictors.
+```{r}
+credit <- credit |>
+  select(
+    -emp_title,
+    -installment,   # derived from loan_amount + term + rate
+    -interest_rate, # outcome of underwriting, not input
+    -grade,
+    -sub_grade,
+    -initial_listing_status,
+    -disbursement_method
+  )
+```
+
+Employment Length is categorical and shoes be converted to numeric
+```{r}
+credit <- credit |>
+  mutate(
+    emp_length = as.numeric(emp_length),
+    emp_length = if_else(is.na(emp_length), 0 , emp_length)
+  )
+```
+
+Lets make some other variables human readable
+```{r}
+#state
+credit <- credit |>
+  mutate(state = factor(state))
+
+#Homeownership
+credit <- credit |>
+  mutate(homeownership = factor(homeownership))
+
+#verified income
+credit <- credit |>
+  mutate(verified_income = factor(verified_income))
+
+#application type
+credit <- credit |>
+  mutate(application_type = factor(application_type))
+
+#loan purpose
+credit <- credit |>
+  mutate(loan_purpose = factor(loan_purpose))
+
+```
+
+Now lets clean up joint and individual loans
+```{r}
+credit <- credit |>
+  mutate(
+    total_income = if_else(
+      application_type == "joint" & !is.na(annual_income_joint),
+      annual_income_joint,
+      annual_income
+    ),
+    total_dti = if_else(
+      application_type == "joint" & !is.na(debt_to_income_joint),
+      debt_to_income_joint,
+      debt_to_income
+    )
+  )
+
+#drop the raw components
+credit <- credit |>
+  select(
+    -annual_income,
+    -annual_income_joint,
+    -debt_to_income,
+    -debt_to_income_joint,
+    -verification_income_joint
+  )
+```
+
+Fixing the credit years variable
+```{r}
+credit <- credit |>
+  mutate(
+    # Ensure earliest_credit_line is numeric year
+    earliest_credit_line = as.numeric(as.character(earliest_credit_line)),
+
+    # Convert issue_month to date
+    issue_date = as.Date(paste0("01-", issue_month), format = "%d-%b-%Y"),
+
+    # Extract issue year
+    issue_year = as.integer(format(issue_date, "%Y")),
+
+    # Compute credit history length
+    credit_history_years = issue_year - earliest_credit_line,
+
+    # Guardrails
+    credit_history_years = pmax(credit_history_years, 0),
+    credit_history_years = pmin(credit_history_years, 50)
+  ) |>
+  select(
+    -issue_month,
+    -issue_date,
+    -earliest_credit_line
+  )
+
+```
+
+
+Now I want to create interpretable ratios
+```{r}
+credit <- credit |>
+  mutate(
+    credit_utilization = total_credit_utilized / total_credit_limit,
+    debit_utilization  = total_debit_limit / pmax(num_active_debit_accounts, 1)
+  )
+```
+
+Now I have to deal with missing values
+```{r}
+credit <- credit |>
+  mutate(
+    months_since_last_delinq = if_else(
+      is.na(months_since_last_delinq), 999, months_since_last_delinq
+    ),
+    months_since_90d_late = if_else(
+      is.na(months_since_90d_late), 999, months_since_90d_late
+    )
+  )
+
+```
+
+# Logistic Regression
+```{r}
+credit_model <- credit |>
+  filter(
+    loan_status %in% c(
+      "Fully Paid",
+      "Charged Off",
+      "Late (31-120 days)"
+    )
+  )
+```
+
+create a target variable
+```{r}
+credit_model <- credit_model |>
+  mutate(
+    default = if_else(
+      loan_status %in% c("Charged Off", "Late (31-120 days)"),
+      1L, 0L
+    )
+  )
+
+#dropping loan status because we labeled it
+credit_model <- credit_model |>
+  select(-loan_status)
+```
+
+```{r}
+credit_model |>
+  count(default) |>
+  mutate(pct = n / sum(n))
+
+```
+Default rate somewhere in the 10–25% range
+
+```{r}
+table(credit$loan_status)
+```
+I excluded current loans because PD models require observed outcomes. Current and early-stage delinquent loans haven’t resolved yet, so including them would bias the target. I restricted training to finalized outcomes, which is standard practice in retail credit risk.
+
+For a baseline PD model, we want:
+-Credit behavior
+-Capacity
+-Stability
+-Minimal redundancy
+-No post-decision leakage
+
+I needed to make sure all variables are usable in a model.
+```{r}
+credit_model <- credit_model |>
+  mutate(
+    # Explicit numeric conversions
+    total_income = as.numeric(total_income),
+    total_dti = as.numeric(total_dti),
+    loan_amount = as.numeric(loan_amount),
+    credit_history_years = as.numeric(credit_history_years),
+    delinq_2y = as.numeric(delinq_2y),
+    months_since_last_delinq = as.numeric(months_since_last_delinq),
+    months_since_90d_late = as.numeric(months_since_90d_late),
+    num_historical_failed_to_pay = as.numeric(num_historical_failed_to_pay),
+    inquiries_last_12m = as.numeric(inquiries_last_12m),
+    credit_utilization = as.numeric(credit_utilization),
+    total_credit_lines = as.numeric(total_credit_lines),
+    open_credit_lines = as.numeric(open_credit_lines),
+    emp_length = as.numeric(emp_length),
+
+    # Explicit categorical casting
+    term = factor(term),
+    homeownership = factor(homeownership),
+    application_type = factor(application_type)
+  )
+
+```
+
+
+```{r}
+credit_model_lr <- glm(
+  default ~
+    total_income +
+    total_dti +
+    loan_amount +
+    term +
+    credit_history_years +
+    delinq_2y +
+    months_since_last_delinq +
+    months_since_90d_late +
+    num_historical_failed_to_pay +
+    inquiries_last_12m +
+    credit_utilization +
+    total_credit_lines +
+    open_credit_lines +
+    emp_length +
+    homeownership +
+    application_type,
+  data = credit_model,
+  family = binomial()
+)
+
+
+```
+
+
+```{r}
+coef_table <- tidy(credit_model_lr, conf.int = TRUE, exponentiate = TRUE)
+
+coef_table |>
+  arrange(desc(estimate))
+
+```
+
+```{r}
+credit_model_lr_results <- credit_model |>
+  mutate(
+    pd = predict(credit_model_lr, type = "response")
+  )
+summary(credit_model_lr_results)
+```
+
+
+
+
+
+
+
+
+
+
+
+
