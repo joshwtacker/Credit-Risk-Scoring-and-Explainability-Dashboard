@@ -12,11 +12,11 @@ I chose this project because I wanted to allow for a diverse portfolio and learn
 
 
 ### Data Question
-1. The analysis will be guided by the following questions:
-2. Which borrower characteristics are most predictive of credit default?
-3. How effectively can a logistic regression model distinguish between default and non-default accounts?
-4. How do predicted default probabilities vary across defined risk bands (low, medium, high)?
-5. How each individual's status of different variables can affect their approval?
+The analysis will be guided by the following questions:
+1. Which borrower characteristics are most predictive of credit default?
+2. How effectively can a logistic regression model distinguish between default and non-default accounts?
+3. How do predicted default probabilities vary across defined risk bands (low, medium, high)?
+4. How each individual's status of different variables can affect their approval?
 	 	 	 	
 ### Minimum Viable Product (MVP)
 The Minimum Viable Product for this project is a complete, working R Shiny application that demonstrates end-to-end credit risk modeling using a single, interpretable model.
