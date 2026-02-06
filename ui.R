@@ -8,61 +8,42 @@
 #
 
 library(shiny)
+library(tidyverse)
 
-# Define UI for application that draws a histogram
-fluidPage(
+library(shiny)
 
-  # Sidebar with a slider input for number of bins
+ui <- fluidPage(
+  titlePanel("Credit Risk Assessment"),
+  
   sidebarLayout(
     sidebarPanel(
-      sliderInput("bins",
-                  "Number of bins:",
-                  min = 1,
-                  max = 50,
-                  value = 30),
-      selectInput("hist_variable",
-                  "Select Variable to Display:",
-                  choices = c(
-                    "Current",
-                    "Fully Paid",
-                    "In Grace Period",
-                    "Late (31-120 days)",
-                    "Charged Off",
-                    "Late (16-30 days)" 
-                  )),
-      selectInput("loan_status",
-                  "Select a status",
-                  choices = c("All",
-                              credit |>
-                                distinct(loan_status) |>
-                                pull() |>
-                                sort()
-                  )
-                  
-      )
+      numericInput("total_income", "Total Income", value = 75000, min = 0),
+      numericInput("total_dti", "Total DTI (%)", value = 15, min = 0),
+      numericInput("loan_amount", "Loan Amount", value = 15000, min = 0),
+      numericInput("credit_history_years", "Credit History (years)", value = 10, min = 0),
+      numericInput("delinq_2y", "Delinquencies in Last 2 Years", value = 0, min = 0),
+      numericInput("months_since_last_delinq", "Months Since Last Delinquency", value = 999, min = 0),
+      numericInput("months_since_90d_late", "Months Since 90-day Late", value = 999, min = 0),
+      numericInput("num_historical_failed_to_pay", "Historical Failed Payments", value = 0, min = 0),
+      numericInput("inquiries_last_12m", "Credit Inquiries Last 12 Months", value = 1, min = 0),
+      numericInput("credit_utilization", "Credit Utilization (%)", value = 30, min = 0, max = 100),
+      numericInput("total_credit_lines", "Total Credit Lines", value = 15, min = 0),
+      numericInput("open_credit_lines", "Open Credit Lines", value = 10, min = 0),
+      numericInput("emp_length", "Employment Length (years)", value = 5, min = 0),
+      selectInput("term", "Loan Term", choices = c(36, 60)),
+      selectInput("homeownership", "Homeownership", choices = c("MORTGAGE", "OWN", "RENT")),
+      selectInput("application_type", "Application Type", choices = c("individual", "joint"))
     ),
     
-    # Show a plot of the generated distribution
     mainPanel(
-      fluidRow(
-        plotOutput("boxplot")
-      ),
-      fluidRow(
-        verbatimTextOutput("linearregression")
-      ),
-      fluidRow(
-        column(
-          width = 8,
-          plotOutput("distPlot")
-        ),
-        column(
-          width = 4,
-          plotOutput("barPlot")
-        )
-      ),
-      fluidRow(
-        dataTableOutput("selectedTable")
-      )
+      h3("Predicted Probability of Default"),
+      textOutput("pd_box"),
+      h3("Risk Band"),
+      textOutput("risk_box"),
+      h3("Underwriting Decision"),
+      textOutput("decision_box"),
+      h3("Top 5 Risk Drivers"),
+      tableOutput("explain_table")
     )
   )
 )

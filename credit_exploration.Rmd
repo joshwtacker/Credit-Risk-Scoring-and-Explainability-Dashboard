@@ -203,7 +203,6 @@ I needed to make sure all variables are usable in a model.
 ```{r}
 credit_model <- credit_model |>
   mutate(
-    # Explicit numeric conversions
     total_income = as.numeric(total_income),
     total_dti = as.numeric(total_dti),
     loan_amount = as.numeric(loan_amount),
@@ -262,6 +261,8 @@ coef_table |>
 
 ```
 
+# Model Performance
+
 ```{r}
 credit_model_lr_results <- credit_model |>
   mutate(
@@ -270,14 +271,209 @@ credit_model_lr_results <- credit_model |>
 summary(credit_model_lr_results)
 ```
 
+```{r}
+library(pROC)
+
+roc_obj <- roc(
+  response = credit_model_lr_results$default,
+  predictor = credit_model_lr_results$pd
+)
+
+auc_value <- auc(roc_obj)
+auc_value
+
+```
+
+```{r}
+plot(
+  roc_obj,
+  col = "blue",
+  main = paste0("ROC Curve (AUC = ", round(auc_value, 3), ")")
+)
+```
+Explanation: 
+- ROC shows how well the model ranks defaults above non-defaults
+- AUC ≈ probability a random bad loan scores worse than a random good loan
+
+0.5 = useless
+0.6–0.7 = weak but usable
+0.7–0.8 = solid credit model
+0.8+ = very strong (rare for consumer credit)
+
+```{r}
+library(ggplot2)
+
+ggplot(credit_model_lr_results, aes(x = pd, fill = factor(default))) +
+  geom_histogram(
+    bins = 50,
+    position = "identity",
+    alpha = 0.5
+  ) +
+  labs(
+    title = "Predicted PD Distribution by Loan Outcome",
+    x = "Predicted Probability of Default",
+    fill = "Default"
+  )
+
+```
 
 
+```{r}
+credit_model_lr_results <- credit_model_lr_results |>
+  mutate(
+    pd_decile = ntile(pd, 10)
+  )
+
+credit_model_lr_results |>
+  group_by(pd_decile) |>
+  summarise(
+    avg_pd = mean(pd),
+    default_rate = mean(default),
+    n = n(),
+    .groups = "drop"
+  ) |>
+  arrange(desc(pd_decile))
+
+```
+
+The model demonstrates strong ranking ability, with an AUC of X. Default rates increase monotonically across PD deciles, indicating effective risk separation.
+
+# Risk Bands
+
+```{r}
+credit_model_lr_results <- credit_model_lr_results |>
+  mutate(
+    risk_band = case_when(
+      pd < 0.05 ~ "Low",
+      pd < 0.15 ~ "Medium",
+      TRUE ~ "High"
+    ),
+    risk_band = factor(risk_band, levels = c("Low", "Medium", "High"))
+  )
+
+```
+
+default risk bands
+```{r}
+credit_model_lr_results |>
+  group_by(risk_band) |>
+  summarise(
+    avg_pd = mean(pd),
+    observed_default_rate = mean(default),
+    n = n(),
+    .groups = "drop"
+  )
+
+```
+
+visual of risk bands
+```{r}
+ggplot(credit_model_lr_results, aes(x = risk_band, fill = factor(default))) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Observed Default Rate by Risk Band",
+    x = "Risk Band",
+    y = "Proportion",
+    fill = "Default"
+  )
+
+```
+decision logic
+
+```{r}
+credit_model_lr_results <- credit_model_lr_results |>
+  mutate(
+    decision = case_when(
+      risk_band == "Low" ~ "Approve",
+      risk_band == "Medium" ~ "Review",
+      TRUE ~ "Decline"
+    )
+  )
+credit_model_lr_results
+```
+Summary: 
+Predicted PDs were translated into risk bands aligned with hypothetical credit policy thresholds. These bands allow consistent decisioning and enable transparent communication of risk to non-technical stakeholders.
+
+# Lets explain somethings here
+
+```{r}
+coef_table <- tidy(
+  credit_model_lr,
+  conf.int = TRUE
+)
+
+coef_table <- coef_table |>
+  mutate(
+    estimate = exp(estimate),
+    conf.low = exp(conf.low),
+    conf.high = exp(conf.high)
+  )
+
+coef_table |>
+  arrange(desc(estimate))
 
 
+```
+
+```{r}
+coef_table_clean <- coef_table |>
+  filter(term != "(Intercept)") |>
+  mutate(
+    direction = if_else(estimate > 1, "Increases Risk", "Decreases Risk"),
+    pct_change_odds = (estimate - 1) * 100
+  ) |>
+  arrange(desc(abs(pct_change_odds)))
+coef_table_clean
+```
+
+```{r}
+X <- model.matrix(credit_model_lr)
+betas <- coef(credit_model_lr)
+
+contrib <- sweep(X, 2, betas, `*`)
+
+explain_one <- function(row_id) {
+  tibble(
+    feature = colnames(contrib),
+    contribution = contrib[row_id, ]
+  ) |>
+    filter(feature != "(Intercept)") |>
+    arrange(desc(abs(contribution)))
+}
+
+explain_one(1)
+```
+
+```{r}
+explain_one(1) |>
+  mutate(
+    impact = case_when(
+      contribution > 0 ~ "Increases PD",
+      TRUE ~ "Decreases PD"
+    )
+  )
+
+```
+
+High credit utilization and renting status increase PD, while longer credit history reduces PD.
+
+```{r}
+credit_model_lr_results <- credit_model_lr_results |>
+  mutate(
+    decision_reason = case_when(
+      risk_band == "High" ~ "High predicted default risk",
+      risk_band == "Medium" ~ "Moderate risk — requires review",
+      TRUE ~ "Low predicted default risk"
+    )
+  )
+
+```
+The model produces a Probability of Default, maps it to risk bands, and provides feature-level explanations for each decision, aligning with model risk management and fair lending expectations.
 
 
-
-
-
-
+```{r}
+all_vars <- names(coef(credit_model_lr))
+all_vars
+```
 

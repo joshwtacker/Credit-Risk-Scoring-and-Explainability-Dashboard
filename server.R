@@ -8,80 +8,107 @@
 #
 
 library(shiny)
+library(tidyverse)
+library(shinydashboard)
 
-# Define server logic required to draw a histogram
-function(input, output, session){ 
+function(input, output, session) {
   
-  output$distPlot <- renderPlot({
-    
-    plot_data <- if (input$loan_status != "All") {
-      credit |> filter(loan_status == input$loan_status)
-    } else {
-      credit
-    }
-    
-    ggplot(plot_data, aes(x = annual_income)) +
-      geom_histogram(bins = input$bins, fill = "blue", alpha = 0.7) +
-      labs(
-        title = "Distribution of Annual Income",
-        x = "Annual Income",
-        y = "Count"
-      )
-})
-  
-  output$barPlot <- renderPlot({
-    
-    if(input$loan_status != "All"){
-      plot_data <- credit |> 
-        filter(loan_status == input$loan_status)
-    } else if(input$loan_status == 'All'){
-      plot_data <- credit
-    }
-    
-    plot_data |> 
-      ggplot(aes(x = loan_status)) +
-      geom_bar()
-    
-  })
-  
-  #boxplot with a trend line
-  output$boxplot <- renderPlot({
-    
-    credit |>
-      ggplot(aes(x= loan_status, y= annual_income, color = loan_status)) +
-      geom_boxplot() +
-      labs(x= "loan_status", y = "annual_income")
-    
-  })
-  
-  #linear regression model output
-  # render text
-  output$linearregression <- renderPrint({
-    
-    credit_glm <- glm(
-      default ~
-        emp_length +
-        homeownership +
-        annual_income +
-        verified_income +
-        debt_to_income +
-        delinq_2y +
-        inquiries_last_12m +
-        total_credit_lines +
-        total_credit_utilized +
-        account_never_delinq_percent +
-        public_record_bankrupt +
-        loan_amount +
-        term +
-        interest_rate +
-        grade +
-        loan_purpose +
-        application_type,
-      data = credit,
-      family = binomial
+  # Reactive borrower data
+  borrower_data <- reactive({
+    tibble(
+      total_income = as.numeric(input$total_income),
+      total_dti = as.numeric(input$total_dti),
+      loan_amount = as.numeric(input$loan_amount),
+      term36 = ifelse(input$term == 36, 1, 0), #my issue is right here
+      term60 = ifelse(input$term == 60, 1, 0),
+      credit_history_years = as.numeric(input$credit_history_years),
+      delinq_2y = as.numeric(input$delinq_2y),
+      months_since_last_delinq = as.numeric(input$months_since_last_delinq),
+      months_since_90d_late = as.numeric(input$months_since_90d_late),
+      num_historical_failed_to_pay = as.numeric(input$num_historical_failed_to_pay),
+      inquiries_last_12m = as.numeric(input$inquiries_last_12m),
+      credit_utilization = as.numeric(input$credit_utilization),
+      total_credit_lines = as.numeric(input$total_credit_lines),
+      open_credit_lines = as.numeric(input$open_credit_lines),
+      emp_length = as.numeric(input$emp_length),
+      homeownershipOWN = ifelse(input$homeownership == "OWN", 1, 0),
+      homeownershipRENT = ifelse(input$homeownership == "RENT", 1, 0),
+      application_typejoint = ifelse(input$application_type == "joint", 1, 0)
     )
-    summary(credit_glm)
   })
   
+  # PD prediction
+  pd_value <- reactive({
+    X_new <- model.matrix(
+      delete.response(terms(credit_model_lr)),
+      borrower_data()
+    )
+    betas <- coef(credit_model_lr)
+    drop1 <- "(Intercept)" %in% names(betas)
+    as.numeric(X_new %*% betas)
+  })
+  
+  # Risk band
+  risk_band <- reactive({
+    case_when(
+      pd_value() < 0.05 ~ "Low",
+      pd_value() < 0.15 ~ "Medium",
+      TRUE ~ "High"
+    )
+  })
+  
+  # Decision
+  decision <- reactive({
+    case_when(
+      risk_band() == "Low" ~ "Approve",
+      risk_band() == "Medium" ~ "Review",
+      TRUE ~ "Decline"
+    )
+  })
+  
+  # Top 5 risk drivers
+  explain_table <- reactive({
+    X_new <- model.matrix(
+      delete.response(terms(credit_model_lr)),
+      borrower_data()
+    )
+    betas <- coef(credit_model_lr)
+    tibble(
+      feature = colnames(X_new),
+      contribution = as.numeric(X_new %*% betas)
+    ) |>
+      filter(feature != "(Intercept)") |>
+      arrange(desc(abs(contribution))) |>
+      slice_head(n = 5)
+  })
+  
+  # Outputs
+  output$pd_box <- renderValueBox({
+    valueBox(
+      paste0(round(pd_value() * 100, 1), "%"),
+      "Predicted Probability of Default",
+      color = "blue"
+    )
+  })
+  
+  output$risk_box <- renderValueBox({
+    valueBox(
+      risk_band(), "Risk Band",
+      color = ifelse(risk_band() == "Low", "green",
+                     ifelse(risk_band() == "Medium", "orange", "red"))
+    )
+  })
+  
+  output$decision_box <- renderValueBox({
+    valueBox(
+      decision(), "Underwriting Decision",
+      color = ifelse(decision() == "Approve", "green",
+                     ifelse(decision() == "Review", "orange", "red"))
+    )
+  })
+  
+  output$explain_table <- renderTable({
+    explain_table() |> rename(Term = feature)
+  })
   
 }
