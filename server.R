@@ -19,8 +19,10 @@ function(input, output, session) {
       total_income = as.numeric(input$total_income),
       total_dti = as.numeric(input$total_dti),
       loan_amount = as.numeric(input$loan_amount),
-      term36 = ifelse(input$term == 36, 1, 0), #my issue is right here
-      term60 = ifelse(input$term == 60, 1, 0),
+      term = factor(
+        as.numeric(input$term),
+        levels = levels(credit_model$term)
+      ),
       credit_history_years = as.numeric(input$credit_history_years),
       delinq_2y = as.numeric(input$delinq_2y),
       months_since_last_delinq = as.numeric(input$months_since_last_delinq),
@@ -31,24 +33,45 @@ function(input, output, session) {
       total_credit_lines = as.numeric(input$total_credit_lines),
       open_credit_lines = as.numeric(input$open_credit_lines),
       emp_length = as.numeric(input$emp_length),
-      homeownershipOWN = ifelse(input$homeownership == "OWN", 1, 0),
-      homeownershipRENT = ifelse(input$homeownership == "RENT", 1, 0),
-      application_typejoint = ifelse(input$application_type == "joint", 1, 0)
+      homeownership = factor(
+        input$homeownership,
+        levels = levels(credit_model$homeownership)
+      ),
+      application_type = factor(
+        input$application_type,
+        levels = levels(credit_model$application_type)
+      )
     )
   })
+  
   
   # PD prediction
   pd_value <- reactive({
-    X_new <- model.matrix(
-      delete.response(terms(credit_model_lr)),
-      borrower_data()
+    req(borrower_data())
+    
+    p <- predict(
+      credit_model_lr,
+      newdata = borrower_data(),
+      type = "response"
     )
-    betas <- coef(credit_model_lr)
-    drop1 <- "(Intercept)" %in% names(betas)
-    as.numeric(X_new %*% betas)
+    
+    validate(
+      need(length(p) == 1, "Waiting for valid input")
+    )
+    
+    as.numeric(p)
   })
   
-  # Risk band
+  output$pd_box <- renderValueBox({
+  valueBox(
+    paste0(round(pd_value() * 100, 1), "%"),
+    "Predicted Probability of Default",
+    color = "blue"
+  )
+})
+
+  
+  # risk band
   risk_band <- reactive({
     case_when(
       pd_value() < 0.05 ~ "Low",
@@ -57,7 +80,7 @@ function(input, output, session) {
     )
   })
   
-  # Decision
+  # decision
   decision <- reactive({
     case_when(
       risk_band() == "Low" ~ "Approve",
@@ -66,7 +89,7 @@ function(input, output, session) {
     )
   })
   
-  # Top 5 risk drivers
+  # top 5 risk drivers
   explain_table <- reactive({
     X_new <- model.matrix(
       delete.response(terms(credit_model_lr)),
@@ -82,14 +105,15 @@ function(input, output, session) {
       slice_head(n = 5)
   })
   
-  # Outputs
-  output$pd_box <- renderValueBox({
-    valueBox(
-      paste0(round(pd_value() * 100, 1), "%"),
-      "Predicted Probability of Default",
-      color = "blue"
-    )
-  })
+  # outputs
+ output$pd_box <- renderValueBox({
+  valueBox(
+    paste0(round(pd_value() * 100, 1), "%"),
+    "Predicted Probability of Default",
+    color = "blue"
+  )
+})
+
   
   output$risk_box <- renderValueBox({
     valueBox(

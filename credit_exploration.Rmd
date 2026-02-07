@@ -428,6 +428,7 @@ coef_table_clean
 ```
 
 ```{r}
+#work to make sure this is working for each variable to explain what is making the prediction change
 X <- model.matrix(credit_model_lr)
 betas <- coef(credit_model_lr)
 
@@ -457,6 +458,42 @@ explain_one(1) |>
 ```
 
 High credit utilization and renting status increase PD, while longer credit history reduces PD.
+
+```{r}
+print_individual_report <- function(row_id, model, data, risk_thresholds = c(Low = 0.05, Medium = 0.15), top_n = 3) {
+  
+  # Generate report
+  report <- full_individual_report(row_id, model, data, risk_thresholds, top_n)
+  
+  cat("===========================================\n")
+  cat("Individual Credit Report\n")
+  cat("Observation ID:", report$row_id, "\n")
+  cat("Predicted PD:", scales::percent(report$predicted_PD, accuracy = 0.1), "\n")
+  cat("Risk Band:", report$risk_band, "\n")
+  cat("===========================================\n\n")
+  
+  # Top contributors
+  cat("Top", top_n, "Contributors to Predicted PD:\n")
+  print(report$top_contributors |> 
+          mutate(
+            contribution_prob = scales::percent(contribution_prob, accuracy = 0.1)
+          ) |>
+          select(feature, value, contribution_prob, direction))
+  cat("\n")
+  
+  # Variable effects
+  cat("Effect of Increasing Each Variable by 1 Unit:\n")
+  print(report$variable_effects |> 
+          mutate(prob_change = scales::percent(prob_change, accuracy = 0.1)))
+  cat("===========================================\n\n")
+}
+
+# Example usage
+print_individual_report(1, credit_model_lr, credit_model_lr_results)
+
+```
+
+
 
 ```{r}
 credit_model_lr_results <- credit_model_lr_results |>
