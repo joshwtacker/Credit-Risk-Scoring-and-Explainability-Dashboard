@@ -309,12 +309,17 @@ ggplot(credit_model_lr_results, aes(x = pd, fill = factor(default))) +
     position = "identity",
     alpha = 0.5
   ) +
+  scale_fill_manual(
+    values = c(
+      "0" = "#003fba",  # No Default
+      "1" = "#706363"   # Default
+    )
+  ) +
   labs(
     title = "Predicted PD Distribution by Loan Outcome",
     x = "Predicted Probability of Default",
     fill = "Default"
   )
-
 ```
 
 
@@ -371,6 +376,10 @@ visual of risk bands
 ggplot(credit_model_lr_results, aes(x = risk_band, fill = factor(default))) +
   geom_bar(position = "fill") +
   scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(
+    values = c("0" = "#003fba",
+               "1" = "#706363") 
+  ) +
   labs(
     title = "Observed Default Rate by Risk Band",
     x = "Risk Band",
@@ -513,4 +522,74 @@ The model produces a Probability of Default, maps it to risk bands, and provides
 all_vars <- names(coef(credit_model_lr))
 all_vars
 ```
+## Tibble for high risk factors
+
+for logistic regression 
+n=XB
+
+impact of a variable
+Impact(J) = B(J)(X(J)- X(J))
+
+create an interactive table that generates impact of each variable based on the comparison with the average value and actual value.
+
+```{r}
+explain_table <- reactive({
+  
+  # Current borrower
+  new_data <- borrower_data()
+  
+  # Model matrix for borrower
+  X_new <- model.matrix(
+    delete.response(terms(credit_model_lr)),
+    new_data
+  )
+  
+  # Model matrix for entire training data
+  X_train <- model.matrix(
+    delete.response(terms(credit_model_lr)),
+    credit_model
+  )
+  
+  # Average borrower (column means)
+  X_avg <- colMeans(X_train)
+  
+  betas <- coef(credit_model_lr)
+  
+  results <- tibble(
+    feature = colnames(X_new),
+    impact = NA_real_
+  )
+  
+  #FOR LOOP
+  for (i in seq_along(results$feature)) {
+    
+    var_name <- results$feature[i]
+    
+    if (var_name %in% names(betas)) {
+      
+      borrower_value <- X_new[1, var_name]
+      avg_value <- X_avg[var_name]
+      beta_value <- betas[var_name]
+      
+      results$impact[i] <- beta_value * (borrower_value - avg_value)
+    }
+  }
+  
+  results |>
+    filter(feature != "(Intercept)") |>
+    arrange(desc(abs(impact))) |>
+    slice_head(n = 5)
+})
+
+```
+
+
+
+
+
+
+
+
+
+
 

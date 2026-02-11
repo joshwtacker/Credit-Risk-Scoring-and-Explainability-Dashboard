@@ -13,7 +13,7 @@ library(tidyverse)
 ui <- dashboardPage(
   dashboardHeader(title = "Credit Risk Assessment"),
   
-  # 2-column sidebar
+  # Sidebar
   dashboardSidebar(
     width = 400,
     
@@ -76,7 +76,8 @@ ui <- dashboardPage(
       box(
         title = "Top Risk Drivers",
         width = 12,
-        tableOutput("explain_table")
+        tableOutput("explain_table"),
+        plotOutput("waterfall_plot", height = "400px")  # <-- Waterfall chart
       )
     )
   )
