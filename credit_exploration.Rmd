@@ -285,11 +285,15 @@ auc_value
 ```
 
 ```{r}
+png("roc_curve.png", width = 800, height = 600)
+
 plot(
   roc_obj,
   col = "blue",
   main = paste0("ROC Curve (AUC = ", round(auc_value, 3), ")")
 )
+
+dev.off()
 ```
 Explanation: 
 - ROC shows how well the model ranks defaults above non-defaults
@@ -299,11 +303,15 @@ Explanation:
 0.6–0.7 = weak but usable
 0.7–0.8 = solid credit model
 0.8+ = very strong (rare for consumer credit)
+```{r}
+getwd()
+```
+
 
 ```{r}
 library(ggplot2)
 
-ggplot(credit_model_lr_results, aes(x = pd, fill = factor(default))) +
+pd_plot <- ggplot(credit_model_lr_results, aes(x = pd, fill = factor(default))) +
   geom_histogram(
     bins = 50,
     position = "identity",
@@ -342,6 +350,17 @@ credit_model_lr_results |>
 ```
 
 The model demonstrates strong ranking ability, with an AUC of X. Default rates increase monotonically across PD deciles, indicating effective risk separation.
+
+```{r}
+ggsave(
+  filename = "pd_distribution.png",
+  plot = pd_plot,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+```
+
 
 # Risk Bands
 
@@ -584,11 +603,104 @@ explain_table <- reactive({
 ```
 
 
+# Overall Scaling
+
+```{r}
+library(dplyr)
+
+# Identify numeric predictors used in the model
+numeric_vars <- c(
+  "total_income",
+  "total_dti",
+  "loan_amount",
+  "credit_history_years",
+  "delinq_2y",
+  "months_since_last_delinq",
+  "months_since_90d_late",
+  "num_historical_failed_to_pay",
+  "inquiries_last_12m",
+  "credit_utilization",
+  "total_credit_lines",
+  "open_credit_lines",
+  "emp_length"
+)
+
+# Scale numeric predictors
+credit_model_scaled <- credit_model |>
+  mutate(across(all_of(numeric_vars), scale))
+
+```
+
+```{r}
+credit_model_lr_scaled <- glm(
+  default ~
+    total_income +
+    total_dti +
+    loan_amount +
+    term +
+    credit_history_years +
+    delinq_2y +
+    months_since_last_delinq +
+    months_since_90d_late +
+    num_historical_failed_to_pay +
+    inquiries_last_12m +
+    credit_utilization +
+    total_credit_lines +
+    open_credit_lines +
+    emp_length +
+    homeownership +
+    application_type,
+  data = credit_model_scaled,
+  family = binomial()
+)
+
+```
 
 
+```{r}
+library(broom)
+
+scaled_results <- tidy(credit_model_lr_scaled) |>
+  filter(term != "(Intercept)") |>
+  mutate(
+    abs_effect = abs(estimate)
+  ) |>
+  arrange(desc(abs_effect))
+
+top5_predictors <- scaled_results |>
+  slice_head(n = 5)
+
+top5_predictors
+
+```
+
+```{r}
+# Extract and rank standardized coefficients
+top5_plot_data <- tidy(credit_model_lr_scaled) |>
+  filter(term != "(Intercept)") |>
+  mutate(abs_effect = abs(estimate)) |>
+  arrange(desc(abs_effect)) |>
+  slice_head(n = 5) |>
+  arrange(estimate)
 
 
+standardized_plot <- ggplot(top5_plot_data, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 5 Standardized Predictors of Default",
+    subtitle = "Effects shown per 1 standard deviation increase",
+    x = "Predictor",
+    y = "Standardized Log-Odds Effect"
+  ) +
+  theme_minimal(base_size = 14)
 
+```
+
+```{r}
+ggsave("standard_plot.png", plot = standardized_plot, width = 7, height = 4, units = "in", dpi = 300)
+
+```
 
 
 

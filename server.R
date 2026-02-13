@@ -163,7 +163,7 @@ function(input, output, session) {
       labs(
         x = "Risk Factor",
         y = "Contribution to Log-Odds",
-        title = "Top 5 Risk Driver Effects"
+        title = "Top 5 Risk Driver Contributions"
       ) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
