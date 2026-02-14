@@ -108,19 +108,46 @@ function(input, output, session) {
   
   # Top 5 Risk Drivers
   explain_table <- reactive({
+    
     X_new <- model.matrix(delete.response(terms(credit_model_lr)), borrower_data())
     betas <- coef(credit_model_lr)
     contrib <- X_new[1, ] * betas
     
-    tibble(
+    raw_df <- tibble(
       feature = names(contrib),
       contribution = as.numeric(contrib)
     ) |>
-      filter(feature != "(Intercept)") |>
+      filter(feature != "(Intercept)")
+    
+    # Helper function to intelligently extract input value
+    get_input_value <- function(feature_name) {
+      
+      # If exact match to numeric input
+      if (feature_name %in% names(input)) {
+        return(input[[feature_name]])
+      }
+      
+      # If dummy variable from factor (e.g. term60)
+      for (input_name in names(input)) {
+        if (startsWith(feature_name, input_name)) {
+          return(input[[input_name]])
+        }
+      }
+      
+      return(NA)
+    }
+    
+    raw_df |>
       mutate(
+        Entered_Value = sapply(feature, get_input_value),
+        
         Risk_Factor = pretty_names[feature],
         Risk_Factor = ifelse(is.na(Risk_Factor), feature, Risk_Factor),
-        Direction = ifelse(contribution > 0, "↑ Increases Risk", "↓ Decreases Risk"),
+        
+        Direction = ifelse(contribution > 0,
+                           "↑ Increases Risk",
+                           "↓ Decreases Risk"),
+        
         Impact_Strength = case_when(
           abs(contribution) > 1 ~ "Very Strong",
           abs(contribution) > 0.5 ~ "Strong",
@@ -130,13 +157,14 @@ function(input, output, session) {
       ) |>
       arrange(desc(abs(contribution))) |>
       slice_head(n = 5) |>
-      select(Risk_Factor, contribution, Direction, Impact_Strength)
+      select(Risk_Factor, Entered_Value, contribution, Direction, Impact_Strength)
   })
   
   output$explain_table <- renderTable({
     explain_table() |>
       rename(
         "Risk Factor" = Risk_Factor,
+        "Entered Value" = Entered_Value,
         "Log-Odds Impact" = contribution,
         "Effect Direction" = Direction,
         "Impact Strength" = Impact_Strength
@@ -145,7 +173,7 @@ function(input, output, session) {
   
   # Waterfall chart for top 5 contributors
   output$waterfall_plot <- renderPlot({
-    df <- explain_table() %>%
+    df <- explain_table() |>
       mutate(
         feature = factor(Risk_Factor, levels = Risk_Factor),
         end = cumsum(contribution),

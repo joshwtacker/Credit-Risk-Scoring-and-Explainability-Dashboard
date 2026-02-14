@@ -225,6 +225,9 @@ credit_model <- credit_model |>
 
 ```
 
+```{r}
+saveRDS(credit_model, file = "credit_model_RDS")
+```
 
 ```{r}
 credit_model_lr <- glm(
@@ -252,6 +255,9 @@ credit_model_lr <- glm(
 
 ```
 
+```{r}
+saveRDS(credit_model_lr, file = "credit_model_lr_RDS")
+```
 
 ```{r}
 coef_table <- tidy(credit_model_lr, conf.int = TRUE, exponentiate = TRUE)
