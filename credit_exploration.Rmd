@@ -13,7 +13,7 @@ library(broom)
 ```
 
 ```{r}
-credit_raw <- read_csv("../data/loans_full_schema.csv") 
+credit_raw <- read_csv("data/loans_full_schema.csv") 
 
 credit <- credit_raw |>
   mutate(
@@ -40,7 +40,7 @@ credit <- credit |>
   )
 ```
 
-Employment Length is categorical and shoes be converted to numeric
+Employment Length is categorical and should be converted to numeric
 ```{r}
 credit <- credit |>
   mutate(
@@ -151,6 +151,117 @@ credit <- credit |>
   )
 
 ```
+
+Test the AUC and ROC on original data
+```{r}
+set.seed(123)  
+
+n <- nrow(credit)
+
+train_index <- sample(seq_len(n), size = 0.75 * n)
+
+train_data <- credit[train_index, ]
+test_data  <- credit[-train_index, ]
+
+```
+
+#ROC and AUC on samples of data set
+
+```{r}
+credit_model_trained_lr <- glm(
+  default ~ .,
+  data = train_data,
+  family = binomial()
+)
+
+```
+```{r}
+library(pROC)
+
+#Generate Predictions on TEST DATA ONLY
+test_data$pd <- predict(
+  credit_model_trained_lr,
+  newdata = test_data,
+  type = "response"
+)
+
+#ROC Object
+roc_obj <- roc(
+  response = test_data$default,
+  predictor = test_data$pd
+)
+
+auc_value <- auc(roc_obj)
+
+#Optimal Cutoff (Youden Index) 
+opt_coords <- coords(
+  roc_obj,
+  x = "best",
+  best.method = "youden",
+  ret = c("threshold", "sensitivity", "specificity")
+)
+
+opt_threshold  <- opt_coords["threshold"]
+sensitivity    <- opt_coords["sensitivity"]
+specificity    <- opt_coords["specificity"]
+
+# Predicted Classes Using Optimal Threshold
+test_data$pred_class <- ifelse(test_data$pd >= opt_threshold, 1, 0)
+
+#confusion matrix
+conf_mat <- table(
+  Actual = test_data$default,
+  Predicted = test_data$pred_class
+)
+
+accuracy <- sum(diag(conf_mat)) / sum(conf_mat)
+```
+
+Plot ROC with All Key Info
+```{r}
+png(
+  filename = "roc_test_plot.png",
+  width = 1200,
+  height = 900,
+  res = 150
+)
+
+plot(
+  roc_obj,
+  col = "blue",
+  lwd = 3,
+  main = "ROC Curve (Test Set)"
+)
+
+legend(
+  "bottomright",
+  legend = c(
+    paste0("AUC: ", round(auc_value, 3)),
+    paste0("Threshold: ", round(opt_threshold, 3)),
+    paste0("Sensitivity: ", round(sensitivity, 3)),
+    paste0("Specificity: ", round(specificity, 3)),
+    paste0("Accuracy: ", round(accuracy, 3))
+  ),
+  bty = "n"
+)
+
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+dev.off()
+
+```
+```{r}
+getwd()
+
+```
+Explanation: 
+- ROC shows how well the model ranks defaults above non-defaults
+- AUC ≈ probability a random bad loan scores worse than a random good loan
+
+0.5 = useless
+0.6–0.7 = weak but usable
+0.7–0.8 = solid credit model
+0.8+ = very strong (rare for consumer credit)
 
 # Logistic Regression
 ```{r}
@@ -267,51 +378,7 @@ coef_table |>
 
 ```
 
-# Model Performance
 
-```{r}
-credit_model_lr_results <- credit_model |>
-  mutate(
-    pd = predict(credit_model_lr, type = "response")
-  )
-summary(credit_model_lr_results)
-```
-
-```{r}
-library(pROC)
-
-roc_obj <- roc(
-  response = credit_model_lr_results$default,
-  predictor = credit_model_lr_results$pd
-)
-
-auc_value <- auc(roc_obj)
-auc_value
-
-```
-
-```{r}
-png("roc_curve.png", width = 800, height = 600)
-
-plot(
-  roc_obj,
-  col = "blue",
-  main = paste0("ROC Curve (AUC = ", round(auc_value, 3), ")")
-)
-
-dev.off()
-```
-Explanation: 
-- ROC shows how well the model ranks defaults above non-defaults
-- AUC ≈ probability a random bad loan scores worse than a random good loan
-
-0.5 = useless
-0.6–0.7 = weak but usable
-0.7–0.8 = solid credit model
-0.8+ = very strong (rare for consumer credit)
-```{r}
-getwd()
-```
 
 
 ```{r}
@@ -494,39 +561,74 @@ explain_one(1) |>
 High credit utilization and renting status increase PD, while longer credit history reduces PD.
 
 ```{r}
-print_individual_report <- function(row_id, model, data, risk_thresholds = c(Low = 0.05, Medium = 0.15), top_n = 3) {
+full_individual_report <- function(row_id, model, data,
+                                   risk_thresholds = c(Low = 0.05, Medium = 0.15),
+                                   top_n = 3) {
   
-  # Generate report
-  report <- full_individual_report(row_id, model, data, risk_thresholds, top_n)
+  borrower <- data[row_id, , drop = FALSE]
   
-  cat("===========================================\n")
-  cat("Individual Credit Report\n")
-  cat("Observation ID:", report$row_id, "\n")
-  cat("Predicted PD:", scales::percent(report$predicted_PD, accuracy = 0.1), "\n")
-  cat("Risk Band:", report$risk_band, "\n")
-  cat("===========================================\n\n")
+  # Predicted PD
+  predicted_PD <- as.numeric(
+    predict(model, newdata = borrower, type = "response")
+  )
   
-  # Top contributors
-  cat("Top", top_n, "Contributors to Predicted PD:\n")
-  print(report$top_contributors |> 
-          mutate(
-            contribution_prob = scales::percent(contribution_prob, accuracy = 0.1)
-          ) |>
-          select(feature, value, contribution_prob, direction))
-  cat("\n")
+  # Risk band
+  risk_band <- dplyr::case_when(
+    predicted_PD < risk_thresholds["Low"] ~ "Low",
+    predicted_PD < risk_thresholds["Medium"] ~ "Medium",
+    TRUE ~ "High"
+  )
   
-  # Variable effects
-  cat("Effect of Increasing Each Variable by 1 Unit:\n")
-  print(report$variable_effects |> 
-          mutate(prob_change = scales::percent(prob_change, accuracy = 0.1)))
-  cat("===========================================\n\n")
+  # Model matrix for ONE borrower
+  X <- model.matrix(model, borrower)
+  betas <- coef(model)
+  
+  # Align coefficients to matrix columns
+  betas <- betas[colnames(X)]
+  
+  # Proper element-wise multiplication (single row)
+  contrib_log_odds <- as.numeric(X[1, ] * betas)
+  
+  # Convert to probability contribution
+  prob <- predicted_PD
+  contrib_prob <- contrib_log_odds * prob * (1 - prob)
+  
+  top_contributors <- tibble::tibble(
+    feature = colnames(X),
+    value = as.numeric(X[1, ]),
+    contribution_prob = contrib_prob,
+    direction = ifelse(contrib_prob > 0, "Increases Risk", "Decreases Risk")
+  ) |>
+    dplyr::filter(feature != "(Intercept)") |>
+    dplyr::arrange(desc(abs(contribution_prob))) |>
+    dplyr::slice_head(n = top_n)
+  
+  # Marginal effects
+  variable_effects <- tibble::tibble(
+    feature = names(betas),
+    beta = betas
+  ) |>
+    dplyr::filter(feature != "(Intercept)") |>
+    dplyr::mutate(
+      prob_change = beta * prob * (1 - prob)
+    ) |>
+    dplyr::select(feature, prob_change)
+  
+  return(list(
+    row_id = row_id,
+    predicted_PD = predicted_PD,
+    risk_band = risk_band,
+    top_contributors = top_contributors,
+    variable_effects = variable_effects
+  ))
 }
-
-# Example usage
-print_individual_report(1, credit_model_lr, credit_model_lr_results)
 
 ```
 
+```{r}
+print_individual_report(1, credit_model_lr, credit_model_lr_results)
+
+```
 
 
 ```{r}
