@@ -1,52 +1,184 @@
-# Credit-Risk-Scoring-and-Explainability-Dashboard
+# Credit Risk Scoring and Explainability Dashboard
+
+---
 
 ## Executive Summary
-The goal of this project is to develop an interactive R Shiny app that predicts the probability of default (PD) for consumer credit accounts while emphasizing model interpretability and transparency. The project is inspired by real-world credit risk modeling practices used in large financial institutions and is designed to align with regulatory and business expectations.
 
-### The final deliverables will include:
-A fully functional Shiny application
-A reproducible analysis workflow hosted on GitHub
-A presentation summarizing the analytical process, findings, and business implications
-Motivation
-I chose this project because I wanted to allow for a diverse portfolio and learn more about credit risk. This project will serve as a major portfolio piece demonstrating applied data science, statistical modeling, and communication skills.
+This project develops an interactive **R Shiny credit risk dashboard** that predicts the **Probability of Default (PD)** for consumer credit accounts while emphasizing **interpretability, transparency, and practical lending application**.
 
+Inspired by real-world credit risk modeling practices used in major financial institutions, the project aligns with regulatory expectations for explainable models and responsible underwriting. The final product transforms statistical model outputs into clear, business-ready lending insights.
 
-### Data Question
-The analysis will be guided by the following questions:
+### Final Deliverables
+
+- A fully functional **R Shiny application**
+- A reproducible modeling workflow hosted on GitHub
+- A presentation summarizing methodology, findings, and business implications
+
+---
+
+## 📊 Live App & Presentation
+
+- 🔗 **Shiny App (Live Demo):**  
+  https://joshwtacker.shinyapps.io/Credit-Risk-Scoring-and-Explainability-Dashboard/
+
+- 📄 **Presentation Slides:**  
+  https://docs.google.com/presentation/d/1NmSKgzRoyifHVpfTvF9-4_rpPONrolqR46Jj9-c2OVo/edit?slide=id.g3c729fdfb55_0_2424#slide=id.g3c729fdfb55_0_2424
+
+---
+
+## Motivation
+
+I chose this project to strengthen my applied data science portfolio and deepen my understanding of **credit risk modeling**. This serves as a flagship portfolio piece demonstrating:
+
+- Statistical modeling  
+- Model validation and evaluation  
+- Explainable AI techniques  
+- Dashboard development in R Shiny  
+- Business communication of quantitative results  
+
+---
+
+## Data Questions
+
+This analysis is guided by the following key questions:
+
 1. Which borrower characteristics are most predictive of credit default?
 2. How effectively can a logistic regression model distinguish between default and non-default accounts?
-3. How do predicted default probabilities vary across defined risk bands (low, medium, high)?
-4. How each individual's status of different variables can affect their approval?
-	 	 	 	
-### Minimum Viable Product (MVP)
-The Minimum Viable Product for this project is a complete, working R Shiny application that demonstrates end-to-end credit risk modeling using a single, interpretable model.
-The MVP will include:
-- A cleaned and prepared version of the UCI Credit Card Default dataset
-- A logistic regression model predicting probability of default (PD)
-- Evaluation of model performance using ROC curve, AUC, and KS statistic
-- A Shiny interface with a borrower input form
-- Real-time PD prediction for hypothetical borrowers
-- Risk band classification (Low / Medium / High)
-- At least one model interpretability visualization explaining individual predictions
+3. How do predicted default probabilities vary across defined risk bands (Low, Medium, High)?
+4. How does each individual borrower’s profile influence their predicted approval status?
+
+---
+
+## Data Source
+
+The primary dataset used in this project is the **UCI Credit Card Default Dataset**.
+
+This publicly available academic dataset includes anonymized borrower-level credit behavior variables suitable for modeling default risk.
+
+- No personally identifiable information (PII) is included.
+- Data contains demographic, financial, and delinquency history variables.
+
+---
+
+## Minimum Viable Product (MVP)
+
+The MVP consists of a complete, end-to-end credit risk modeling workflow implemented in R.
+
+### Core Components
+
+- Cleaned and prepared dataset  
+- Logistic regression model predicting Probability of Default (PD)  
+- Model performance evaluation using:
+  - ROC Curve  
+  - AUC (Area Under the Curve)  
+  - KS Statistic  
+- Interactive Shiny borrower input form  
+- Real-time PD prediction  
+- Risk band classification (Low / Medium / High)  
+- Individual-level model explainability (Top Risk Drivers)
+
+---
+
+## Modeling Approach
+
+The primary model used is **logistic regression**, selected for its:
+
+- Interpretability  
+- Regulatory acceptance in financial institutions  
+- Transparent coefficient-based explanation  
+- Ease of communicating risk drivers to stakeholders  
+
+The model was trained on a training dataset and evaluated on a holdout testing dataset to assess generalization performance.
+
+---
+
+## Key Conclusions
+
+### 1. The Model Accurately Predicts Borrower Default Risk
+
+The logistic regression model demonstrates strong discriminatory power, effectively distinguishing between default and non-default accounts using ROC, AUC, and KS metrics.
+
+---
+
+### 2. Risk Predictions Are Transparent and Fully Explainable
+
+Because the model is logistic regression:
+
+- Each coefficient directly reflects the directional impact on default risk.
+- Individual predictions can be decomposed into feature-level contributions.
+- The dashboard highlights **Top Risk Drivers** for each borrower.
+
+This ensures interpretability consistent with real-world regulatory expectations.
+
+---
+
+### 3. The Dashboard Converts Model Output into Clear Lending Decisions
+
+Raw probabilities are translated into actionable **Risk Bands**:
+
+- **Low Risk**
+- **Medium Risk**
+- **High Risk**
+
+This bridges the gap between statistical modeling and operational underwriting decisions.
+
+---
+
+### 4. Delinquency History and Leverage Are the Strongest Risk Drivers
+
+The most predictive features consistently include:
+
+- Past delinquency indicators  
+- Credit utilization / leverage measures  
+- Payment behavior history  
+
+These findings align with established credit risk theory and real-world underwriting practice.
+
+---
+
+### 5. The Framework Enables Smarter, Data-Driven Underwriting
+
+This system demonstrates how financial institutions can:
+
+- Standardize credit decisions  
+- Quantify borrower risk consistently  
+- Reduce subjective decision-making  
+- Improve portfolio risk management  
+
+The model provides a scalable foundation for automated underwriting workflows.
+
+---
+
+### 6. Future Improvements
+
+While the MVP achieves its goals, future enhancements could include:
+
+- Gradient boosting or ensemble model comparisons  
+- Cross-validation tuning  
+- Probability calibration improvements  
+- Automated reporting features  
+- Deployment to a cloud-hosted environment  
+- Bias and fairness diagnostics  
+
+These enhancements could further improve predictive accuracy and operational efficiency.
+
+---
+
+## Known Challenges Addressed
+
+- Handling missing and inconsistent values  
+- Recoding categorical variables  
+- Feature engineering (e.g., utilization ratios)  
+- Creating a binary default target variable  
+- Train/test data splitting  
+- Avoiding overfitting  
+- Building interpretable model explanations  
+
+---
 
 
-### Schedule (through 2/21/2026)
-Get the Data (01/23/2026)
-Clean & Explore the Data (02/05/2026)
-Create Presentation and Shiny App (02/15/2026)
-Internal Demos (2/17/2026)
-Midcourse Project Presentations (2/21/2026)
+## Final Takeaway
 
+This project demonstrates how statistical modeling, explainability, and interactive dashboards can be combined to create a transparent and practical credit risk decision-support tool.
 
-### Data Sources
-The primary dataset for this project will be the UCI Credit Card Default Dataset, a publicly available academic dataset. The dataset contains anonymized borrower characteristics and credit behavior variables suitable for modeling default risk.
-The dataset does not contain personally identifiable information (PII) in the final deliverables.
-
-### Known Issues and Challenges
-Some issues that I will run into are below:
-Handling missing and inconsistent values
-Recoding categorical variables into analysis-ready formats
-Feature engineering (e.g., utilization ratios, income and balance transformations)
-Creating a binary default target variable
-Splitting data into training and testing sets
-.
+The result is not just a predictive model — but a fully interpretable underwriting framework that translates data into confident lending decisions.
