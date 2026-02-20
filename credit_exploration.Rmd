@@ -169,7 +169,23 @@ test_data  <- credit[-train_index, ]
 
 ```{r}
 credit_model_trained_lr <- glm(
-  default ~ .,
+  default ~
+    total_income +
+    total_dti +
+    loan_amount +
+    term +
+    credit_history_years +
+    delinq_2y +
+    months_since_last_delinq +
+    months_since_90d_late +
+    num_historical_failed_to_pay +
+    inquiries_last_12m +
+    credit_utilization +
+    total_credit_lines +
+    open_credit_lines +
+    emp_length +
+    homeownership +
+    application_type,
   data = train_data,
   family = binomial()
 )
